@@ -66,6 +66,6 @@ model.add(Dense(units = 24 , activation = 'softmax'))
 model.compile(optimizer = 'adam' , loss = 'categorical_crossentropy' , metrics = ['accuracy'])
 model.summary()
 
-history = model.fit(datagen.flow(x_train,y_train, batch_size = 128) ,epochs = 20 , validation_data = (x_test, y_test) , callbacks = [learning_rate_reduction])
+history = model.fit(datagen.flow(x_train,y_train, batch_size = 128) ,epochs = 60 , validation_data = (x_test, y_test) , callbacks = [learning_rate_reduction])
 
 model.save('smnist.h5')
