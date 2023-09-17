@@ -348,8 +348,6 @@ class game_runner:
                             self.pick_zone()
                             self.stage_num += 1
                     #if this results in the 10th stage being cleared, then do the reincarnation procedure
-                            if self.stage_num % 10 == 0:
-                                self.reincarnate()
                 #if the player clicks on the upgrade crit button, upgrade their crit
                 elif key == pygame.K_c:
                     if self.player.get_gold() >= int(10*self.player.get_crit_multiplier()):
