@@ -4,6 +4,11 @@ import random
 import time
 
 BOSS_TIME_MULT = 1
+DEFAULT_ENEMY_SIZE = (200,200)
+DEFAULT_BACKGROUND_SIZE = (1280,720-180) #The background should fill the screen, but not the top bar
+#enemies should be centered in the middle of the screen
+DEFAULT_ENEMY_POS = (1280/2 - DEFAULT_ENEMY_SIZE[0]/2, 720/2 - DEFAULT_ENEMY_SIZE[1]/2)
+DEFAULT_BACKGROUND_POS = (0,180)
 
 #a list of enemies per region, 1-3 are regular enemies, 4 is the boss
 enemies_dict_forest = {1: "Fairy", 2: "Wolf", 3: "Goblin", 4: "Ogre"}
@@ -14,6 +19,7 @@ enemies_dict_castle = {1: "Knight", 2: "Goblin", 3: "Wizard", 4: "Dragon"}
 enemies_dict_lake = {1: "Fairy", 2: "Sahuagin", 3: "Goblin", 4: "Kraken"}
 
 region_list = ["Forest", "Desert", "Dungeon", "Hell", "Castle", "Lake"]
+sounds_list = ["hitsound.ogg", "slash.ogg"]
 
 #the list of regions
 regions_dict = {"Forest":enemies_dict_forest, "Desert":enemies_dict_desert, "Dungeon":enemies_dict_dungeon, "Hell":enemies_dict_hell, "Castle":enemies_dict_castle, "Lake":enemies_dict_lake}
@@ -31,9 +37,12 @@ class enemy:
         self.type = regions_dict[zone][random.randint(1,3)] #the type of enemy, chosen randomly from the list of enemies in the region
         self.stage = stage
         self.is_boss = False
+        self.starting_health = self.health
+        self.is_hit = False
 
     def take_damage(self, damage):
         self.health -= damage
+        self.is_hit = True
     def make_boss(self,zone):
         self.health = 20*self.stage
         self.type = regions_dict[zone][4]
@@ -44,6 +53,8 @@ class enemy:
         return self.health
     def get_type(self):
         return self.type
+    def get_starting_health(self):
+        return self.starting_health
     
     def is_dead(self) -> bool:
         if self.health <= 0:
@@ -182,10 +193,20 @@ class game_runner:
         self.screen.blit(stage, (400,0))
     #draw the current zone as the background
     def draw_zone(self):
-        self.screen.blit(regions_images[self.zone], (0,180))
+        zone_img = regions_images[self.zone]
+        pygame.transform.scale(zone_img, DEFAULT_BACKGROUND_SIZE)
+        self.screen.blit(zone_img, DEFAULT_BACKGROUND_POS)
     #draw the enemies in the current stage and their health
     def draw_enemies(self):
-        self.screen.blit(enemies_images[self.stage.get_current_enemy().get_type()], (400,180))
+        if self.stage.get_current_enemy().is_hit:
+            #play the hitsound 
+            pygame.mixer.music.load(sounds_list[random.randint(0,1)])
+            pygame.mixer.music.play()
+            pygame.time.delay(150)
+            return
+        enemy_image = enemies_images[self.stage.get_current_enemy().get_type()]
+        pygame.transform.scale(enemy_image, DEFAULT_ENEMY_SIZE)
+        self.screen.blit(enemy_image, DEFAULT_ENEMY_POS)
         health = self.font.render("Health: " + str(self.stage.get_current_enemy().get_health()), 1, (255,255,255))
         self.screen.blit(health, (400,300))
         enemy = self.stage.get_current_enemy()
@@ -196,6 +217,20 @@ class game_runner:
     def draw_stats(self):
         enemies = self.font.render("Enemies: " + str(self.stage.get_num_enemies()), 1, (255,255,255))
         self.screen.blit(enemies, (400,330))
+        if self.enemyTimer > 0:
+            timer = self.font.render("Time: " + str(self.enemyTimer/1000), 1, (255,255,255))
+            self.screen.blit(timer, (600,330))
+    def draw_bars(self):
+        #enemy health bar
+        currEnemy = self.stage.get_current_enemy()
+        pygame.draw.rect(self.screen, (255,0,0), pygame.Rect(700,200, 800*currEnemy.get_health()/currEnemy.get_starting_health(),5))
+        #timer bar
+        if self.enemyTimer > 0:
+            pygame.draw.rect(self.screen, (255,255,0), pygame.Rect(700, 210, 800*self.enemyTimer/5000, 5))
+        
+
+
+
 
     #draw the game screen
     def draw_screen(self):
@@ -205,6 +240,8 @@ class game_runner:
         self.draw_stage()
         self.draw_enemies()
         self.draw_stats()
+        self.draw_bars()
+
 
         pygame.display.flip()
 
@@ -239,51 +276,48 @@ class game_runner:
     # resetting their stats except for one which they can select 
     def reincarnate(self):
         #clear the screen
-        pygame.display.fill((0,0,0))
+        self.screen.fill((0,0,0))
         #dipslay 3 buttons, one for each stat, all other screen elements should be cleared
         #the player can click on one of the buttons to reincarnate with that stat
         #blit the top highest button, which is the crit button, it should be a rectangle with the word crit in it
-        self.screen.blit(pygame.image.load("crit_button.png"), (300,180))
+        self.screen.blit(pygame.image.load("crit_button.png"), (640,180))
         #blit the middle button, which is the damage button, it should be a rectangle with the word damage in it
-        self.screen.blit(pygame.image.load("damage_button.png"), (0,230))
+        self.screen.blit(pygame.image.load("damage_button.png"), (640, 400))
         #blit the bottom button, which is the health button, it should be a rectangle with the word health in it
-        self.screen.blit(pygame.image.load("health_button.png"), (0,280))
+        self.screen.blit(pygame.image.load("health_button.png"), (640,800))
         while True:
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    sys.exit()
             #if the mouse is clicked check it's posiiton 
-                elif event.type == pygame.MOUSEBUTTONDOWN:
-                    mouse_pos = pygame.mouse.get_pos()
-                    #if the player clicks on the crit button, reincarnate with crit
-                    if mouse_pos[0] >= 0 and mouse_pos[0] <= 200 and mouse_pos[1] >= 180 and mouse_pos[1] <= 230:
-                        tempcrit = self.player.get_crit_multiplier()
-                        self.player = player()
-                        self.player.crit_multiplier = tempcrit
-                        #reset the game state 
-                        self.stage_num = 1
-                        self.zone = "Forest"
-                        self.stage = stage(1, "Forest")
+            if pygame.event.type == pygame.MOUSEBUTTONDOWN:
+                mouse_pos = pygame.mouse.get_pos()
+                #if the player clicks on the crit button, reincarnate with crit
+                if mouse_pos[0] >= 0 and mouse_pos[0] <= 200 and mouse_pos[1] >= 180 and mouse_pos[1] <= 230:
+                    tempcrit = self.player.get_crit_multiplier()
+                    self.player = player()
+                    self.player.crit_multiplier = tempcrit
+                    #reset the game state 
+                    self.stage_num = 1
+                    self.zone = "Forest"
+                    self.stage = stage(1, "Forest")
 
-                        return
-                    #if the player clicks on the damage button, reincarnate with damage
-                    elif mouse_pos[0] >= 0 and mouse_pos[0] <= 200 and mouse_pos[1] >= 230 and mouse_pos[1] <= 280:
-                        tempdamage = self.player.get_damage_multiplier()
-                        self.player = player()
-                        self.player.damage_multiplier = tempdamage
+                    return
+                #if the player clicks on the damage button, reincarnate with damage
+                elif mouse_pos[0] >= 0 and mouse_pos[0] <= 200 and mouse_pos[1] >= 230 and mouse_pos[1] <= 280:
+                    tempdamage = self.player.get_damage_multiplier()
+                    self.player = player()
+                    self.player.damage_multiplier = tempdamage
 
-                        self.stage_num = 1
-                        self.zone = "Forest"
-                        self.stage = stage(1, "Forest")
-                        return
-                    #if the player clicks on the health button, reincarnate with health
-                    elif mouse_pos[0] >= 0 and mouse_pos[0] <= 200 and mouse_pos[1] >= 280 and mouse_pos[1] <= 330:
+                    self.stage_num = 1
+                    self.zone = "Forest"
+                    self.stage = stage(1, "Forest")
+                    return
+                #if the player clicks on the health button, reincarnate with health
+                elif mouse_pos[0] >= 0 and mouse_pos[0] <= 200 and mouse_pos[1] >= 280 and mouse_pos[1] <= 330:
 
-                        self.player = player()
-                        self.stage_num = 1
-                        self.zone = "Forest"
-                        self.stage = stage(1, "Forest")
-                        return
+                    self.player = player()
+                    self.stage_num = 1
+                    self.zone = "Forest"
+                    self.stage = stage(1, "Forest")
+                    return
 
     #handle the player's input
     def handle_input(self):
@@ -295,7 +329,11 @@ class game_runner:
                 key = event.key
                 #if the player presses the spacebar, deal damage to the enemy
                 if key == pygame.K_SPACE:
-                    self.player.deal_damage(self.stage.get_current_enemy(), 0) #TODO add crit
+                    self.player.deal_damage(self.stage.get_current_enemy(), self.is_crit_range)
+                    #display the slash animation stored in slash.gif
+                    self.screen.blit(pygame.image.load("slash.gif"), (640,360))
+                    pygame.display.flip()
+                    self.enemyTimer = 5000 #give the player 5 seconds to kill the next enemy
                     #if the damage kills the enemy, remove it from the stage and give the player exp and gold
                     if self.stage.get_current_enemy().is_dead():
                         self.stage.kill_current_enemy()
@@ -354,34 +392,17 @@ class game_runner:
                 self.enemyTimer -= 60
             #if the timer runs out, deal damage to the player
             elif self.enemyTimer == 0:
-                self.player.take_damage(1)
+                self.player.take_damage(self.stage.get_stage_num())
                 self.enemyTimer = 5000 #reset the timer
             #if the timer is in the crit range, set the is_crit_range flag to true
             if self.enemyTimer > 3500:
                 self.is_crit_range = True
             else:
                 self.is_crit_range = False
+            if self.stage.get_current_enemy().is_hit:
+                self.stage.get_current_enemy().is_hit = False
             
             
 #run the game
 game = game_runner()
 game.run()
-
-    
-
-
-
-
-    
-        
-    
-
-    
-        
-
-
-
-
-
-
-
